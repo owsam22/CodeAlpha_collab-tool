@@ -13,7 +13,11 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     if (user) {
-      const newSocket = io(window.location.origin, {
+      const socketURL = import.meta.env.MODE === 'development' 
+        ? window.location.origin 
+        : import.meta.env.VITE_API_URL;
+
+      const newSocket = io(socketURL, {
         transports: ['websocket', 'polling'],
       });
 
