@@ -9,6 +9,9 @@ import Whiteboard from '../components/Whiteboard';
 import FileUpload from '../components/FileUpload';
 import TaskList from '../components/TaskList';
 import { HiOutlineVideoCamera, HiOutlineChatAlt2, HiOutlinePencilAlt, HiOutlineDocument, HiOutlineUserGroup, HiOutlineArrowLeft, HiOutlineDuplicate, HiOutlineInformationCircle, HiOutlineTrash } from 'react-icons/hi';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { motion, AnimatePresence } from 'framer-motion';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -82,12 +85,24 @@ const MeetingRoom = () => {
       setParticipants(users);
     });
 
-    socket.on('room:user-joined', ({ users }) => {
+    socket.on('room:user-joined', ({ user: joinedUser, users }) => {
       setParticipants(users);
+      toast.info(`${joinedUser?.name || 'A user'} joined the room`, {
+        position: "top-center",
+        autoClose: 2000,
+        hideProgressBar: true,
+      });
     });
 
-    socket.on('room:user-left', ({ users }) => {
+    socket.on('room:user-left', ({ user: leftUser, users }) => {
       setParticipants(users);
+      if (leftUser) {
+        toast.info(`${leftUser.name || 'A user'} left the room`, {
+          position: "top-center",
+          autoClose: 2000,
+          hideProgressBar: true,
+        });
+      }
     });
 
     return () => {
@@ -202,8 +217,10 @@ const MeetingRoom = () => {
         </div>
 
         {/* Video area */}
-        <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           <VideoCall roomId={roomId} />
+          
+          <ToastContainer theme="dark" />
 
           {/* Participants overlay */}
           {showParticipants && (

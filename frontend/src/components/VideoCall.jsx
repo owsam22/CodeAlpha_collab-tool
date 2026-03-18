@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
-import { HiOutlineMicrophone, HiOutlineVideoCamera, HiOutlineDesktopComputer, HiOutlineVolumeOff, HiOutlineEyeOff } from 'react-icons/hi';
+import { HiOutlineMicrophone, HiOutlineVideoCamera, HiOutlineDesktopComputer, HiOutlineVolumeOff, HiOutlineEyeOff, HiOutlineX } from 'react-icons/hi';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-toastify';
 
 const VideoCall = ({ roomId }) => {
   const { socket } = useSocket();
@@ -131,6 +133,10 @@ const VideoCall = ({ roomId }) => {
     // When a new user joins, create offer
     socket.on('video:user-joined', async ({ socketId, user: remoteUser }) => {
       console.log('User joined, creating offer for:', socketId);
+      toast.info(`${remoteUser?.name || 'A user'} joined the video call`, {
+        position: "bottom-left",
+        autoClose: 3000,
+      });
       const pc = createPeerConnection(socketId, remoteUser);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -170,6 +176,13 @@ const VideoCall = ({ roomId }) => {
 
     // User left
     socket.on('video:user-left', ({ socketId }) => {
+      const peer = peersRef.current[socketId];
+      if (peer) {
+        // We can't easily get the name here unless we store it, 
+        // but room:user-left might be better for general notifications anyway.
+        // For now, simple notification:
+        toast.info(`A user left the video call`, { position: "bottom-left", autoClose: 3000 });
+      }
       removePeer(socketId);
     });
 
@@ -282,69 +295,121 @@ const VideoCall = ({ roomId }) => {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
       {/* Video Grid */}
       <div className="video-grid" style={{
         flex: 1, display: 'grid',
         gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
         gridAutoRows: isMobile ? '200px' : '1fr',
-        gap: 8, padding: 8, overflow: 'auto',
+        gap: 12, padding: 12, overflow: 'auto',
       }}>
         {/* Local Video */}
-        <div style={{
-          position: 'relative', borderRadius: 12, overflow: 'hidden',
-          background: '#1a1a2e', minHeight: 180,
-        }}>
+        <motion.div 
+          layout
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          style={{
+            position: 'relative', borderRadius: 16, overflow: 'hidden',
+            background: '#1a1a2e', minHeight: 180,
+            boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+          }}
+        >
           <video
             ref={localVideoRef} autoPlay muted playsInline
             style={{ width: '100%', height: '100%', objectFit: 'cover', transform: isScreenSharing ? 'none' : 'scaleX(-1)' }}
           />
           <div style={{
-            position: 'absolute', bottom: 8, left: 8,
-            background: 'rgba(0,0,0,0.6)', padding: '4px 10px',
-            borderRadius: 6, fontSize: '0.75rem', fontWeight: 600,
+            position: 'absolute', bottom: 12, left: 12,
+            background: 'rgba(15, 23, 42, 0.7)', padding: '6px 12px',
+            borderRadius: 8, fontSize: '0.75rem', fontWeight: 600,
+            backdropFilter: 'blur(4px)', color: 'white',
+            display: 'flex', alignItems: 'center', gap: 6,
           }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: isMuted ? '#ef4444' : '#22c55e' }} />
             You {isScreenSharing && '(Screen)'}
           </div>
-        </div>
+        </motion.div>
 
         {/* Remote Videos */}
-        {peerEntries.map(([socketId, { stream, user: remoteUser }]) => (
-          <RemoteVideo key={socketId} stream={stream} user={remoteUser} />
-        ))}
+        <AnimatePresence>
+          {peerEntries.map(([socketId, { stream, user: remoteUser }]) => (
+            <motion.div
+              key={socketId}
+              layout
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              style={{ height: '100%', width: '100%' }}
+            >
+              <RemoteVideo stream={stream} user={remoteUser} />
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
-      {/* Controls */}
-      <div className="video-controls" style={{
-        display: 'flex', justifyContent: 'center', gap: isMobile ? 8 : 12,
-        padding: isMobile ? '16px 8px' : '12px 0', 
-        borderTop: '1px solid var(--glass-border)',
-        background: isMobile ? 'rgba(15, 23, 42, 0.8)' : 'transparent',
-      }}>
-        <button className={`btn-icon ${isMuted ? '' : 'active'}`} onClick={toggleMute}
-          style={{ 
-            ...(isMuted ? { background: 'var(--color-danger)' } : {}),
-            width: isMobile ? 50 : 40, height: isMobile ? 50 : 40, borderRadius: isMobile ? '50%' : 10 
-          }}>
-          {isMuted ? <HiOutlineVolumeOff size={isMobile ? 22 : 18} /> : <HiOutlineMicrophone size={isMobile ? 22 : 18} />}
-        </button>
-        <button className={`btn-icon ${isVideoOff ? '' : 'active'}`} onClick={toggleVideo}
-          style={{ 
-            ...(isVideoOff ? { background: 'var(--color-danger)' } : {}),
-            width: isMobile ? 50 : 40, height: isMobile ? 50 : 40, borderRadius: isMobile ? '50%' : 10 
-          }}>
-          {isVideoOff ? <HiOutlineEyeOff size={isMobile ? 22 : 18} /> : <HiOutlineVideoCamera size={isMobile ? 22 : 18} />}
-        </button>
-        <button className={`btn-icon ${isScreenSharing ? 'active' : ''}`} onClick={toggleScreenShare}
-          style={{ 
-            width: isMobile ? 50 : 40, height: isMobile ? 50 : 40, borderRadius: isMobile ? '50%' : 10 
-          }}>
-          <HiOutlineDesktopComputer size={isMobile ? 22 : 18} />
-        </button>
-      </div>
+      {/* Floating Controls Overlay */}
+      <motion.div 
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        style={{
+          position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          display: 'flex', alignItems: 'center', gap: 16,
+          padding: '12px 24px', borderRadius: 24,
+          background: 'rgba(30, 41, 59, 0.7)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.5)',
+          zIndex: 100,
+        }}
+      >
+        <ControlButton 
+          active={!isMuted} 
+          onClick={toggleMute} 
+          icon={isMuted ? <HiOutlineVolumeOff /> : <HiOutlineMicrophone />} 
+          label={isMuted ? "Unmute" : "Mute"}
+          danger={isMuted}
+        />
+        <ControlButton 
+          active={!isVideoOff} 
+          onClick={toggleVideo} 
+          icon={isVideoOff ? <HiOutlineEyeOff /> : <HiOutlineVideoCamera />} 
+          label={isVideoOff ? "Start Video" : "Stop Video"}
+          danger={isVideoOff}
+        />
+        <ControlButton 
+          active={isScreenSharing} 
+          onClick={toggleScreenShare} 
+          icon={<HiOutlineDesktopComputer />} 
+          label={isScreenSharing ? "Stop Sharing" : "Share Screen"}
+          accent
+        />
+      </motion.div>
     </div>
   );
 };
+
+const ControlButton = ({ active, onClick, icon, label, danger, accent }) => (
+  <motion.button
+    whileHover={{ scale: 1.1 }}
+    whileTap={{ scale: 0.95 }}
+    onClick={onClick}
+    title={label}
+    style={{
+      width: 44, height: 44, borderRadius: '50%',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: '1.2rem', cursor: 'pointer', border: 'none',
+      background: active 
+        ? (accent ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.1)') 
+        : (danger ? '#ef4444' : 'rgba(255, 255, 255, 0.05)'),
+      color: active || danger ? 'white' : 'var(--color-text-muted)',
+      transition: 'background 0.2s, color 0.2s',
+      boxShadow: active ? '0 0 15px rgba(99, 102, 241, 0.3)' : 'none',
+    }}
+  >
+    {icon}
+  </motion.button>
+);
 
 const RemoteVideo = ({ stream, user }) => {
   const ref = useRef(null);
