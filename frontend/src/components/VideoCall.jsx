@@ -81,7 +81,15 @@ const VideoCall = ({ roomId }) => {
   useEffect(() => {
     const initMedia = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const constraints = { 
+          video: { 
+            width: { ideal: 640 }, 
+            height: { ideal: 480 },
+            facingMode: "user" 
+          }, 
+          audio: true 
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         localStreamRef.current = stream;
         setLocalStream(stream);
         if (localVideoRef.current) {
@@ -110,12 +118,19 @@ const VideoCall = ({ roomId }) => {
 
   // Socket event listeners
   useEffect(() => {
-    if (!socket || !localStreamRef.current) return;
+    if (!socket) return;
 
-    socket.emit('video:join-room', { roomId, user });
+    const joinRoom = () => {
+      console.log('Emitting video:join-room');
+      socket.emit('video:join-room', { roomId, user });
+    };
+
+    // Delay slightly to ensure localStream usually finishes init first
+    const joinTimeout = setTimeout(joinRoom, 1500);
 
     // When a new user joins, create offer
     socket.on('video:user-joined', async ({ socketId, user: remoteUser }) => {
+      console.log('User joined, creating offer for:', socketId);
       const pc = createPeerConnection(socketId, remoteUser);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -124,6 +139,7 @@ const VideoCall = ({ roomId }) => {
 
     // Receive offer, create answer
     socket.on('video:offer', async ({ from, offer, user: remoteUser }) => {
+      console.log('Received offer from:', from);
       const pc = createPeerConnection(from, remoteUser);
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await pc.createAnswer();
@@ -133,6 +149,7 @@ const VideoCall = ({ roomId }) => {
 
     // Receive answer
     socket.on('video:answer', async ({ from, answer }) => {
+      console.log('Received answer from:', from);
       const pc = peersRef.current[from];
       if (pc) {
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
@@ -157,6 +174,7 @@ const VideoCall = ({ roomId }) => {
     });
 
     return () => {
+      clearTimeout(joinTimeout);
       socket.off('video:user-joined');
       socket.off('video:offer');
       socket.off('video:answer');
@@ -164,7 +182,25 @@ const VideoCall = ({ roomId }) => {
       socket.off('video:user-left');
       socket.emit('video:leave', { roomId });
     };
-  }, [socket, localStreamRef.current, roomId, createPeerConnection]);
+  }, [socket, roomId, createPeerConnection, user]);
+
+  // Sync local tracks with existing peer connections once stream is ready
+  useEffect(() => {
+    if (!localStream) return;
+    
+    console.log('Local stream ready, syncing with existing peers:', Object.keys(peersRef.current));
+    Object.values(peersRef.current).forEach(pc => {
+      // Check if tracks already added
+      const senders = pc.getSenders();
+      localStream.getTracks().forEach(track => {
+        const alreadyAdded = senders.some(s => s.track?.id === track.id);
+        if (!alreadyAdded) {
+          console.log('Adding missing track to peer:', track.kind);
+          pc.addTrack(track, localStream);
+        }
+      });
+    });
+  }, [localStream]);
 
   const toggleMute = () => {
     if (localStreamRef.current) {

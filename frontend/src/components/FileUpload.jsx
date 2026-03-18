@@ -52,7 +52,7 @@ const FileUpload = ({ roomId, meetingId }) => {
         socket.emit('file:uploaded', {
           roomId,
           file: res.data.file,
-          userName: user.name,
+          userName: user?.name,
         });
       }
     } catch (err) {
@@ -159,7 +159,7 @@ const FileUpload = ({ roomId, meetingId }) => {
                   onClick={(e) => e.stopPropagation()}>
                   <HiOutlineDocumentDownload size={14} />
                 </a>
-                {(file.uploadedBy?._id === user?.id || user?.role === 'admin') && (
+                {(file.uploadedBy?._id === user?.id || file.uploadedBy === user?.id || user?.role === 'admin') && (
                   <button className="btn-icon" onClick={() => deleteFile(file._id)}
                     style={{ width: 30, height: 30, color: 'var(--color-danger)' }}>
                     <HiOutlineTrash size={14} />

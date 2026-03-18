@@ -121,6 +121,22 @@ const initSocket = (io) => {
       }
     });
 
+    socket.on('whiteboard:undo', async ({ roomId }) => {
+      try {
+        const meeting = await Meeting.findOne({ roomId });
+        if (meeting) {
+          const whiteboard = await Whiteboard.findOne({ meeting: meeting._id });
+          if (whiteboard && whiteboard.strokes.length > 0) {
+            whiteboard.strokes.pop();
+            await whiteboard.save();
+            io.to(roomId).emit('whiteboard:undo', { strokes: whiteboard.strokes });
+          }
+        }
+      } catch (err) {
+        console.error('Error undoing whiteboard stroke:', err.message);
+      }
+    });
+
     // ─── Video Signaling (WebRTC) ─────────────────────────
     socket.on('video:join-room', ({ roomId, user }) => {
       // Notify existing users so they can create offers

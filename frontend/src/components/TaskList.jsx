@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import API from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 import { HiOutlinePlus, HiOutlineCheckCircle, HiOutlineClock, HiOutlineTrash } from 'react-icons/hi';
 
 const TaskList = ({ meetingId, teamId }) => {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [loading, setLoading] = useState(true);
@@ -100,12 +102,14 @@ const TaskList = ({ meetingId, teamId }) => {
               }}>
                 {task.title}
               </span>
-              <button 
-                onClick={() => deleteTask(task._id)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', opacity: 0.6 }}
-              >
-                <HiOutlineTrash size={16} />
-              </button>
+              {(task.createdBy?._id === user?.id || task.createdBy === user?.id || task.createdBy?._id === user?._id || task.createdBy === user?._id) && (
+                <button 
+                  onClick={() => deleteTask(task._id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', opacity: 0.6 }}
+                >
+                  <HiOutlineTrash size={16} />
+                </button>
+              )}
             </div>
           ))
         )}

@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
-import { HiOutlinePencil, HiOutlineTrash } from 'react-icons/hi';
+import { HiOutlinePencilAlt, HiOutlineTrash } from 'react-icons/hi';
 
 const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#ffffff'];
 const WIDTHS = [2, 4, 6, 8];
 
-const Whiteboard = ({ roomId }) => {
+const Whiteboard = ({ roomId, isActive }) => {
   const { socket } = useSocket();
   const { user } = useAuth();
   const canvasRef = useRef(null);
@@ -16,6 +16,34 @@ const Whiteboard = ({ roomId }) => {
   const [lineWidth, setLineWidth] = useState(2);
   const [tool, setTool] = useState('pen');
   const currentStrokeRef = useRef([]);
+  const allStrokesRef = useRef([]);
+
+  const drawStroke = useCallback((stroke) => {
+    const ctx = contextRef.current;
+    if (!ctx || !stroke || !stroke.points || stroke.points.length < 2) return;
+
+    ctx.beginPath();
+    ctx.strokeStyle = stroke.tool === 'eraser' ? '#0f172a' : stroke.color;
+    ctx.lineWidth = stroke.tool === 'eraser' ? stroke.width * 4 : stroke.width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+    for (let i = 1; i < stroke.points.length; i++) {
+      ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+    }
+    ctx.stroke();
+  }, []);
+
+  const redrawAll = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = contextRef.current;
+    if (!canvas || !ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (allStrokesRef.current && Array.isArray(allStrokesRef.current)) {
+      allStrokesRef.current.forEach(stroke => drawStroke(stroke));
+    }
+  }, [drawStroke]);
 
   // Initialize canvas
   useEffect(() => {
@@ -37,19 +65,49 @@ const Whiteboard = ({ roomId }) => {
     return () => window.removeEventListener('resize', resize);
   }, []);
 
+  // Handle active state (tab switching)
+  useEffect(() => {
+    if (isActive) {
+      const resize = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        const ctx = canvas.getContext('2d');
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        contextRef.current = ctx;
+        redrawAll();
+      };
+      
+      // Small timeout to ensure DOM has updated display styles
+      setTimeout(resize, 50);
+    }
+  }, [isActive, redrawAll]);
+
   // Load existing strokes and listen for new ones
   useEffect(() => {
     if (!socket) return;
 
     socket.on('whiteboard:load', ({ strokes }) => {
-      strokes.forEach((stroke) => drawStroke(stroke));
+      allStrokesRef.current = strokes;
+      redrawAll();
     });
 
     socket.on('whiteboard:draw', ({ stroke }) => {
+      allStrokesRef.current.push(stroke);
       drawStroke(stroke);
     });
 
+    socket.on('whiteboard:undo', (data) => {
+      const strokes = data?.strokes || [];
+      allStrokesRef.current = strokes;
+      redrawAll();
+    });
+
     socket.on('whiteboard:clear', () => {
+      allStrokesRef.current = [];
       const canvas = canvasRef.current;
       if (canvas && contextRef.current) {
         contextRef.current.clearRect(0, 0, canvas.width, canvas.height);
@@ -59,26 +117,12 @@ const Whiteboard = ({ roomId }) => {
     return () => {
       socket.off('whiteboard:load');
       socket.off('whiteboard:draw');
+      socket.off('whiteboard:undo');
       socket.off('whiteboard:clear');
     };
   }, [socket]);
 
-  const drawStroke = useCallback((stroke) => {
-    const ctx = contextRef.current;
-    if (!ctx || !stroke.points || stroke.points.length < 2) return;
 
-    ctx.beginPath();
-    ctx.strokeStyle = stroke.tool === 'eraser' ? '#0f172a' : stroke.color;
-    ctx.lineWidth = stroke.tool === 'eraser' ? stroke.width * 4 : stroke.width;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-    for (let i = 1; i < stroke.points.length; i++) {
-      ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-    }
-    ctx.stroke();
-  }, []);
 
   const getPos = (e) => {
     const canvas = canvasRef.current;
@@ -122,13 +166,20 @@ const Whiteboard = ({ roomId }) => {
         color,
         width: lineWidth,
         points: currentStrokeRef.current,
-        userId: user.id,
-        userName: user.name,
+        userId: user?.id || user?._id,
+        userName: user?.name,
         timestamp: new Date(),
       };
+      if (allStrokesRef.current) allStrokesRef.current.push(stroke);
       socket.emit('whiteboard:draw', { roomId, stroke });
     }
     currentStrokeRef.current = [];
+  };
+
+  const handleUndo = () => {
+    if (socket) {
+      socket.emit('whiteboard:undo', { roomId });
+    }
   };
 
   const clearBoard = () => {
@@ -150,7 +201,7 @@ const Whiteboard = ({ roomId }) => {
       }}>
         <button className={`btn-icon ${tool === 'pen' ? 'active' : ''}`}
           onClick={() => setTool('pen')} style={{ width: 32, height: 32 }}>
-          <HiOutlinePencil size={14} />
+          <HiOutlinePencilAlt size={14} />
         </button>
         <button className={`btn-icon ${tool === 'eraser' ? 'active' : ''}`}
           onClick={() => setTool('eraser')} style={{ width: 32, height: 32, fontSize: '0.7rem' }}>
@@ -187,7 +238,12 @@ const Whiteboard = ({ roomId }) => {
 
         <div style={{ flex: 1 }} />
 
-        <button className="btn-icon" onClick={clearBoard} style={{ width: 32, height: 32, color: 'var(--color-danger)' }}>
+        <button className="btn-icon" onClick={handleUndo} style={{ width: 32, height: 32 }} title="Undo">
+          <HiOutlineTrash style={{ transform: 'rotate(180deg)' }} />
+          <span style={{ fontSize: '0.6rem', position: 'absolute', bottom: -10 }}>Undo</span>
+        </button>
+
+        <button className="btn-icon" onClick={clearBoard} style={{ width: 32, height: 32, color: 'var(--color-danger)' }} title="Clear All">
           <HiOutlineTrash size={14} />
         </button>
       </div>

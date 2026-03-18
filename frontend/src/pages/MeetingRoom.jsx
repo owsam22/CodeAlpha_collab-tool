@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,30 @@ import Whiteboard from '../components/Whiteboard';
 import FileUpload from '../components/FileUpload';
 import TaskList from '../components/TaskList';
 import { HiOutlineVideoCamera, HiOutlineChatAlt2, HiOutlinePencilAlt, HiOutlineDocument, HiOutlineUserGroup, HiOutlineArrowLeft, HiOutlineDuplicate, HiOutlineInformationCircle, HiOutlineTrash } from 'react-icons/hi';
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("Component Error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 20, textAlign: 'center', color: 'var(--color-danger)' }}>
+          <h3>Something went wrong in this panel.</h3>
+          <button className="btn-primary" onClick={() => this.setState({ hasError: false })}>Try Again</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const PANELS = {
   CHAT: 'chat',
@@ -50,9 +74,9 @@ const MeetingRoom = () => {
 
   // Join socket room
   useEffect(() => {
-    if (!socket || !meeting) return;
+    if (!socket || !meeting || !user) return;
 
-    socket.emit('room:join', { roomId, user: { id: user.id, name: user.name, avatar: user.avatar } });
+    socket.emit('room:join', { roomId, user: { id: user.id || user._id, name: user.name, avatar: user.avatar } });
 
     socket.on('room:users', ({ users }) => {
       setParticipants(users);
@@ -108,9 +132,21 @@ const MeetingRoom = () => {
   }
 
   return (
-    <div className="meeting-layout" style={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
+    <div className="meeting-layout" style={{ 
+      display: 'flex', 
+      height: 'calc(100vh - 64px)', 
+      overflow: 'hidden',
+      flexDirection: activePanel === PANELS.WHITEBOARD ? 'row-reverse' : 'row'
+    }}>
       {/* Main Video Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ 
+        flex: activePanel === PANELS.WHITEBOARD ? '0 0 300px' : 1, 
+        display: 'flex', 
+        flexDirection: 'column',
+        transition: 'all 0.3s ease',
+        borderRight: activePanel === PANELS.WHITEBOARD ? '1px solid var(--glass-border)' : 'none',
+        background: activePanel === PANELS.WHITEBOARD ? 'rgba(15,23,42,0.8)' : 'transparent',
+      }}>
         {/* Top bar */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -153,7 +189,7 @@ const MeetingRoom = () => {
               style={{ width: 34, height: 34, display: 'none' }}>
                <HiOutlineChatAlt2 size={16} />
             </button>
-            {(meeting?.host._id === user.id || meeting?.host === user.id) && (
+            {(meeting?.host._id === user?.id || meeting?.host === user?.id || meeting?.host?._id === user?._id) && (
               <button className="btn-icon" onClick={handleDeleteMeeting} 
                 style={{ width: 34, height: 34, color: 'var(--color-danger)' }} title="Delete Meeting">
                 <HiOutlineTrash size={16} />
@@ -198,9 +234,11 @@ const MeetingRoom = () => {
       <div 
         className={`side-panel ${isMobilePanelOpen ? 'open' : ''}`}
         style={{
-          width: 360, borderLeft: '1px solid var(--glass-border)',
+          flex: activePanel === PANELS.WHITEBOARD ? 1 : '0 0 360px',
+          borderLeft: activePanel === PANELS.WHITEBOARD ? 'none' : '1px solid var(--glass-border)',
           display: 'flex', flexDirection: 'column',
           background: 'rgba(30, 41, 59, 0.95)',
+          transition: 'all 0.3s ease',
         }}
       >
         {/* Mobile Header for Panel */}
@@ -240,12 +278,22 @@ const MeetingRoom = () => {
           ))}
         </div>
 
-        {/* Panel Content */}
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          {activePanel === PANELS.CHAT && <Chat roomId={roomId} />}
-          {activePanel === PANELS.WHITEBOARD && <Whiteboard roomId={roomId} />}
-          {activePanel === PANELS.FILES && <FileUpload roomId={roomId} meetingId={meeting?._id} />}
-          {activePanel === PANELS.TASKS && <TaskList meetingId={meeting?._id} teamId={meeting?.team?._id || meeting?.team} />}
+        {/* Panel Content - Persistent Mounting */}
+        <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+          <ErrorBoundary>
+            <div style={{ display: activePanel === PANELS.CHAT ? 'block' : 'none', height: '100%' }}>
+              <Chat roomId={roomId} />
+            </div>
+            <div style={{ display: activePanel === PANELS.WHITEBOARD ? 'block' : 'none', height: '100%' }}>
+              <Whiteboard roomId={roomId} isActive={activePanel === PANELS.WHITEBOARD} />
+            </div>
+            <div style={{ display: activePanel === PANELS.FILES ? 'block' : 'none', height: '100%' }}>
+              <FileUpload roomId={roomId} meetingId={meeting?._id} />
+            </div>
+            <div style={{ display: activePanel === PANELS.TASKS ? 'block' : 'none', height: '100%' }}>
+              <TaskList meetingId={meeting?._id} teamId={meeting?.team?._id || meeting?.team} />
+            </div>
+          </ErrorBoundary>
         </div>
       </div>
     </div>

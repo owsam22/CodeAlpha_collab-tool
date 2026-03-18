@@ -49,7 +49,14 @@ const updateTask = async (req, res) => {
 
 const deleteTask = async (req, res) => {
   try {
-    await Task.findByIdAndDelete(req.params.id);
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+
+    if (task.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Not authorized to delete this task' });
+    }
+
+    await task.deleteOne();
     res.json({ message: 'Task deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });

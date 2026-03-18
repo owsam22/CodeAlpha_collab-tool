@@ -92,7 +92,7 @@ const Chat = ({ roomId }) => {
           </p>
         )}
         {messages.map((msg, i) => {
-          const isOwn = msg.sender === user.id || msg.senderName === user.name;
+          const isOwn = msg.sender === user?.id || msg.sender === user?._id || msg.senderName === user?.name;
           return (
             <div key={i} style={{
               display: 'flex', flexDirection: 'column',
