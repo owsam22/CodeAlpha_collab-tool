@@ -199,20 +199,19 @@ body {
   .side-panel {
     position: fixed;
     top: 0;
+    left: 0;
     right: 0;
     bottom: 0;
-    width: 300px !important;
-    max-width: 85vw;
-    z-index: 100;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-    box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+    width: 100% !important;
+    max-width: 100vw !important;
+    z-index: 1000;
     background: var(--color-surface) !important;
-    border-left: 1px solid var(--glass-border);
+    display: none;
+    flex-direction: column;
   }
 
   .side-panel.open {
-    transform: translateX(0);
+    display: flex !important;
   }
 
   .teams-grid {

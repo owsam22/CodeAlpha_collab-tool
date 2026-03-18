@@ -3,6 +3,8 @@ const Whiteboard = require('../models/Whiteboard');
 
 // Track online users per room
 const roomUsers = new Map();
+// Track whiteboard locks per room: roomId -> { socketId, userId, userName }
+const whiteboardLocks = new Map();
 
 const initSocket = (io) => {
   io.on('connection', (socket) => {
@@ -37,7 +39,7 @@ const initSocket = (io) => {
         users: Array.from(roomUsers.get(roomId).values()),
       });
 
-      // Send existing whiteboard data
+      // Send existing whiteboard data and current lock status
       try {
         const meeting = await Meeting.findOne({ roomId });
         if (meeting) {
@@ -48,6 +50,13 @@ const initSocket = (io) => {
 
           // Send chat history
           socket.emit('chat:history', { messages: meeting.chatHistory || [] });
+        }
+
+        // Send whiteboard lock info
+        if (whiteboardLocks.has(roomId)) {
+          socket.emit('whiteboard:lock-update', { lock: whiteboardLocks.get(roomId) });
+        } else {
+          socket.emit('whiteboard:lock-update', { lock: null });
         }
       } catch (err) {
         console.error('Error loading room data:', err.message);
@@ -91,6 +100,12 @@ const initSocket = (io) => {
 
     // ─── Whiteboard ──────────────────────────────────────
     socket.on('whiteboard:draw', async ({ roomId, stroke }) => {
+      // Check if sender has the lock
+      const currentLock = whiteboardLocks.get(roomId);
+      if (currentLock && currentLock.socketId !== socket.id) {
+        return; // Ignore if not holding the lock
+      }
+
       // Broadcast to others in room
       socket.to(roomId).emit('whiteboard:draw', { stroke });
 
@@ -109,6 +124,9 @@ const initSocket = (io) => {
     });
 
     socket.on('whiteboard:clear', async ({ roomId }) => {
+      const currentLock = whiteboardLocks.get(roomId);
+      if (currentLock && currentLock.socketId !== socket.id) return;
+
       socket.to(roomId).emit('whiteboard:clear');
 
       try {
@@ -122,6 +140,9 @@ const initSocket = (io) => {
     });
 
     socket.on('whiteboard:undo', async ({ roomId }) => {
+      const currentLock = whiteboardLocks.get(roomId);
+      if (currentLock && currentLock.socketId !== socket.id) return;
+
       try {
         const meeting = await Meeting.findOne({ roomId });
         if (meeting) {
@@ -134,6 +155,26 @@ const initSocket = (io) => {
         }
       } catch (err) {
         console.error('Error undoing whiteboard stroke:', err.message);
+      }
+    });
+
+    socket.on('whiteboard:request-lock', ({ roomId }) => {
+      if (!whiteboardLocks.has(roomId)) {
+        const lockInfo = {
+          socketId: socket.id,
+          userId: socket.userData?.id || socket.userData?._id,
+          userName: socket.userData?.name || 'Someone'
+        };
+        whiteboardLocks.set(roomId, lockInfo);
+        io.to(roomId).emit('whiteboard:lock-update', { lock: lockInfo });
+      }
+    });
+
+    socket.on('whiteboard:release-lock', ({ roomId }) => {
+      const currentLock = whiteboardLocks.get(roomId);
+      if (currentLock && currentLock.socketId === socket.id) {
+        whiteboardLocks.delete(roomId);
+        io.to(roomId).emit('whiteboard:lock-update', { lock: null });
       }
     });
 
@@ -160,6 +201,10 @@ const initSocket = (io) => {
 
     socket.on('video:leave', ({ roomId }) => {
       socket.to(roomId).emit('video:user-left', { socketId: socket.id });
+    });
+
+    socket.on('video:status-update', ({ roomId, status }) => {
+      socket.to(roomId).emit('video:status-update', { socketId: socket.id, status });
     });
 
     // ─── Screen Share ─────────────────────────────────────
@@ -202,6 +247,13 @@ const initSocket = (io) => {
 
 function handleLeaveRoom(socket, roomId, io) {
   socket.leave(roomId);
+
+  // Auto-release whiteboard lock if the user has it
+  const currentLock = whiteboardLocks.get(roomId);
+  if (currentLock && currentLock.socketId === socket.id) {
+    whiteboardLocks.delete(roomId);
+    io.to(roomId).emit('whiteboard:lock-update', { lock: null });
+  }
 
   if (roomUsers.has(roomId)) {
     roomUsers.get(roomId).delete(socket.id);

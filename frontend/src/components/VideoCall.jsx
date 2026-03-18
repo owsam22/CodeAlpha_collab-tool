@@ -174,6 +174,17 @@ const VideoCall = ({ roomId }) => {
       }
     });
 
+    // Receive status update
+    socket.on('video:status-update', ({ socketId, status }) => {
+      setPeers((prev) => {
+        if (!prev[socketId]) return prev;
+        return {
+          ...prev,
+          [socketId]: { ...prev[socketId], status },
+        };
+      });
+    });
+
     // User left
     socket.on('video:user-left', ({ socketId }) => {
       const peer = peersRef.current[socketId];
@@ -192,10 +203,21 @@ const VideoCall = ({ roomId }) => {
       socket.off('video:offer');
       socket.off('video:answer');
       socket.off('video:ice-candidate');
+      socket.off('video:status-update');
       socket.off('video:user-left');
       socket.emit('video:leave', { roomId });
     };
   }, [socket, roomId, createPeerConnection, user]);
+
+  // Broadcast local status when it changes
+  useEffect(() => {
+    if (socket && roomId) {
+      socket.emit('video:status-update', {
+        roomId,
+        status: { isVideoOff, isMuted }
+      });
+    }
+  }, [isVideoOff, isMuted, socket, roomId]);
 
   // Sync local tracks with existing peer connections once stream is ready
   useEffect(() => {
@@ -283,107 +305,179 @@ const VideoCall = ({ roomId }) => {
   };
 
   const peerEntries = Object.entries(peers);
-  const totalVideos = 1 + peerEntries.length;
   
-  // Responsive grid logic
-  const isMobile = window.innerWidth <= 768;
-  let gridCols;
-  if (isMobile) {
-    gridCols = totalVideos <= 1 ? 1 : 2;
+  // Categorize participants
+  const videoParticipants = [];
+  const avatarParticipants = [];
+
+  // Local user
+  if (isVideoOff) {
+    avatarParticipants.push({ id: 'local', user, isLocal: true });
   } else {
-    gridCols = totalVideos <= 1 ? 1 : totalVideos <= 4 ? 2 : 3;
+    videoParticipants.push({ id: 'local', user, isLocal: true, stream: localStream });
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
-      {/* Video Grid */}
-      <div className="video-grid" style={{
-        flex: 1, display: 'grid',
-        gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-        gridAutoRows: isMobile ? '200px' : '1fr',
-        gap: 12, padding: 12, overflow: 'auto',
-      }}>
-        {/* Local Video */}
-        <motion.div 
-          layout
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          style={{
-            position: 'relative', borderRadius: 16, overflow: 'hidden',
-            background: '#1a1a2e', minHeight: 180,
-            boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-          }}
-        >
-          <video
-            ref={localVideoRef} autoPlay muted playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'cover', transform: isScreenSharing ? 'none' : 'scaleX(-1)' }}
-          />
-          <div style={{
-            position: 'absolute', bottom: 12, left: 12,
-            background: 'rgba(15, 23, 42, 0.7)', padding: '6px 12px',
-            borderRadius: 8, fontSize: '0.75rem', fontWeight: 600,
-            backdropFilter: 'blur(4px)', color: 'white',
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: isMuted ? '#ef4444' : '#22c55e' }} />
-            You {isScreenSharing && '(Screen)'}
-          </div>
-        </motion.div>
+  // Remote users
+  peerEntries.forEach(([socketId, data]) => {
+    if (data.status?.isVideoOff) {
+      avatarParticipants.push({ id: socketId, ...data });
+    } else {
+      videoParticipants.push({ id: socketId, ...data });
+    }
+  });
 
-        {/* Remote Videos */}
-        <AnimatePresence>
-          {peerEntries.map(([socketId, { stream, user: remoteUser }]) => (
-            <motion.div
-              key={socketId}
-              layout
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              style={{ height: '100%', width: '100%' }}
-            >
-              <RemoteVideo stream={stream} user={remoteUser} />
-            </motion.div>
-          ))}
-        </AnimatePresence>
+  const totalVideos = videoParticipants.length;
+  const isMobile = window.innerWidth <= 768;
+  
+  // Grid columns for active video users
+  let gridCols = totalVideos <= 1 ? 1 : totalVideos <= 4 ? 2 : 3;
+  if (isMobile && totalVideos > 1) gridCols = 2;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden', background: '#0f172a' }}>
+      {/* Main Video/Avatar Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        
+        {/* Active Video Grid */}
+        <div className="video-grid" style={{
+          flex: videoParticipants.length > 0 ? 1 : 0,
+          display: 'grid',
+          gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
+          gridAutoRows: isMobile ? '220px' : '1fr',
+          gap: 12, padding: 12, 
+          overflow: 'auto',
+          alignContent: 'center'
+        }}>
+          <AnimatePresence>
+            {videoParticipants.map((p) => (
+              <motion.div
+                key={p.id}
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                style={{ height: '100%', width: '100%', position: 'relative' }}
+              >
+                {p.isLocal ? (
+                  <div style={{
+                    position: 'relative', borderRadius: 16, overflow: 'hidden',
+                    background: '#1a1a2e', height: '100%',
+                    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                  }}>
+                    <video
+                      ref={localVideoRef} autoPlay muted playsInline
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', transform: isScreenSharing ? 'none' : 'scaleX(-1)' }}
+                    />
+                    <div style={{
+                      position: 'absolute', bottom: 12, left: 12,
+                      background: 'rgba(15, 23, 42, 0.7)', padding: '6px 12px',
+                      borderRadius: 8, fontSize: '0.75rem', fontWeight: 600,
+                      backdropFilter: 'blur(4px)', color: 'white',
+                      display: 'flex', alignItems: 'center', gap: 6,
+                    }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: isMuted ? '#ef4444' : '#22c55e' }} />
+                      You {isScreenSharing && '(Screen)'}
+                    </div>
+                  </div>
+                ) : (
+                  <RemoteVideo stream={p.stream} user={p.user} />
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {/* Minimized Avatars Row (Google Meet style at the bottom) */}
+        {avatarParticipants.length > 0 && (
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', gap: 8, padding: '12px',
+            justifyContent: 'center', borderTop: videoParticipants.length > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+            maxHeight: '30%', overflow: 'auto'
+          }}>
+            <AnimatePresence>
+              {avatarParticipants.map((p) => (
+                <motion.div
+                  key={p.id}
+                  layout
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  style={{
+                    width: isMobile ? 80 : 120, height: isMobile ? 80 : 90,
+                    borderRadius: 12, background: 'rgba(30, 41, 59, 0.8)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    gap: 8, position: 'relative', border: '1px solid rgba(255,255,255,0.1)',
+                    backdropFilter: 'blur(8px)'
+                  }}
+                >
+                  <div style={{
+                    width: isMobile ? 32 : 40, height: isMobile ? 32 : 40,
+                    borderRadius: '50%', background: 'var(--color-primary)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: isMobile ? '0.8rem' : '1rem', fontWeight: 700, color: 'white'
+                  }}>
+                    {(p.user?.name || 'U')[0].toUpperCase()}
+                  </div>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'white', textAlign: 'center', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+                    {p.isLocal ? 'You' : p.user?.name || 'User'}
+                  </span>
+                  {p.status?.isMuted && (
+                    <div style={{ position: 'absolute', top: 4, right: 4, color: '#ef4444' }}>
+                      <HiOutlineVolumeOff size={12} />
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
 
-      {/* Floating Controls Overlay */}
+      {/* Controls Overlay */}
       <motion.div 
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         style={{
-          position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          display: 'flex', alignItems: 'center', gap: 16,
-          padding: '12px 24px', borderRadius: 24,
-          background: 'rgba(30, 41, 59, 0.7)',
-          backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255, 255, 255, 0.15)',
-          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.5)',
+          position: isMobile ? 'fixed' : 'absolute',
+          bottom: isMobile ? 0 : 32,
+          left: isMobile ? 0 : '50%',
+          right: isMobile ? 0 : 'auto',
+          transform: isMobile ? 'none' : 'translateX(-50%)',
           zIndex: 100,
+          display: 'flex',
+          gap: isMobile ? 20 : 16,
+          background: isMobile ? 'rgba(15, 23, 42, 0.95)' : 'rgba(30, 41, 59, 0.7)',
+          backdropFilter: 'blur(12px)',
+          padding: isMobile ? '16px 0 32px 0' : '12px 24px',
+          borderRadius: isMobile ? 0 : 24,
+          borderTop: isMobile ? '1px solid var(--glass-border)' : 'none',
+          border: isMobile ? 'none' : '1px solid rgba(255, 255, 255, 0.15)',
+          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          width: isMobile ? '100%' : 'auto',
         }}
       >
-        <ControlButton 
-          active={!isMuted} 
-          onClick={toggleMute} 
-          icon={isMuted ? <HiOutlineVolumeOff /> : <HiOutlineMicrophone />} 
-          label={isMuted ? "Unmute" : "Mute"}
+        <ControlButton
+          icon={isMuted ? <HiOutlineVolumeOff /> : <HiOutlineMicrophone />}
+          onClick={toggleMute}
+          active={!isMuted}
           danger={isMuted}
         />
-        <ControlButton 
-          active={!isVideoOff} 
-          onClick={toggleVideo} 
-          icon={isVideoOff ? <HiOutlineEyeOff /> : <HiOutlineVideoCamera />} 
-          label={isVideoOff ? "Start Video" : "Stop Video"}
+        <ControlButton
+          icon={isVideoOff ? <HiOutlineEyeOff /> : <HiOutlineVideoCamera />}
+          onClick={toggleVideo}
+          active={!isVideoOff}
           danger={isVideoOff}
         />
-        <ControlButton 
-          active={isScreenSharing} 
-          onClick={toggleScreenShare} 
-          icon={<HiOutlineDesktopComputer />} 
-          label={isScreenSharing ? "Stop Sharing" : "Share Screen"}
-          accent
-        />
+        {!isMobile && (
+          <ControlButton
+            icon={isScreenSharing ? <HiOutlineX /> : <HiOutlineDesktopComputer />}
+            onClick={toggleScreenShare}
+            active={isScreenSharing}
+            accent
+          />
+        )}
       </motion.div>
     </div>
   );
@@ -422,7 +516,7 @@ const RemoteVideo = ({ stream, user }) => {
   return (
     <div style={{
       position: 'relative', borderRadius: 12, overflow: 'hidden',
-      background: '#1a1a2e', minHeight: 180,
+      background: '#1a1a2e', height: '100%',
     }}>
       <video ref={ref} autoPlay playsInline
         style={{ width: '100%', height: '100%', objectFit: 'cover' }}

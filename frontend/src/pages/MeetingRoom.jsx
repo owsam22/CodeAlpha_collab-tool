@@ -2,6 +2,7 @@ import { useState, useEffect, Component } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
+import useMobile from '../hooks/useMobile';
 import API from '../api/axios';
 import VideoCall from '../components/VideoCall';
 import Chat from '../components/Chat';
@@ -48,6 +49,7 @@ const MeetingRoom = () => {
   const { roomId } = useParams();
   const { socket } = useSocket();
   const { user } = useAuth();
+  const isMobile = useMobile();
   const navigate = useNavigate();
   const [meeting, setMeeting] = useState(null);
   const [activePanel, setActivePanel] = useState(PANELS.CHAT);
@@ -134,7 +136,6 @@ const MeetingRoom = () => {
   const copyInviteLink = () => {
     const url = window.location.href;
     navigator.clipboard.writeText(url);
-    // Ideally we'd show a toast here, but for now we'll just have the user see the visual feedback if we added any
     alert('Meeting link copied to clipboard!');
   };
 
@@ -151,16 +152,19 @@ const MeetingRoom = () => {
       display: 'flex', 
       height: 'calc(100vh - 64px)', 
       overflow: 'hidden',
-      flexDirection: activePanel === PANELS.WHITEBOARD ? 'row-reverse' : 'row'
+      flexDirection: isMobile ? 'column' : (activePanel === PANELS.WHITEBOARD ? 'row-reverse' : 'row')
     }}>
       {/* Main Video Area */}
       <div style={{ 
-        flex: activePanel === PANELS.WHITEBOARD ? '0 0 300px' : 1, 
+        flex: isMobile ? 'none' : (activePanel === PANELS.WHITEBOARD ? '0 0 300px' : 1),
+        height: isMobile ? (activePanel === PANELS.WHITEBOARD ? '180px' : '45%') : 'auto',
         display: 'flex', 
         flexDirection: 'column',
-        transition: 'all 0.3s ease',
-        borderRight: activePanel === PANELS.WHITEBOARD ? '1px solid var(--glass-border)' : 'none',
-        background: activePanel === PANELS.WHITEBOARD ? 'rgba(15,23,42,0.8)' : 'transparent',
+        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+        borderRight: (!isMobile && activePanel === PANELS.WHITEBOARD) ? '1px solid var(--glass-border)' : 'none',
+        borderBottom: (isMobile) ? '1px solid var(--glass-border)' : 'none',
+        background: activePanel === PANELS.WHITEBOARD ? 'rgba(15,23,42,0.95)' : 'transparent',
+        zIndex: 1,
       }}>
         {/* Top bar */}
         <div style={{
@@ -172,8 +176,8 @@ const MeetingRoom = () => {
             <button className="btn-icon" onClick={leaveMeeting} style={{ width: 34, height: 34 }}>
               <HiOutlineArrowLeft size={16} />
             </button>
-            <div>
-              <h2 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{meeting?.title || 'Meeting'}</h2>
+            <div className={isMobile && activePanel === PANELS.WHITEBOARD ? 'mobile-hide' : ''}>
+              <h2 style={{ fontSize: '0.9rem', fontWeight: 600, maxWidth: isMobile ? '120px' : '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meeting?.title || 'Meeting'}</h2>
               <span style={{
                 fontSize: '0.65rem', color: 'var(--color-success)', fontWeight: 600,
                 display: 'flex', alignItems: 'center', gap: 4,
@@ -185,41 +189,50 @@ const MeetingRoom = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button className="btn-secondary" onClick={copyInviteLink} 
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: '0.8rem' }}>
-              <HiOutlineDuplicate size={16} /> Copy Invite
-            </button>
-            <button className="btn-icon mobile-hide" onClick={() => setShowParticipants(!showParticipants)}
-              style={{ width: 34, height: 34, position: 'relative' }}>
-              <HiOutlineUserGroup size={16} />
-              <span style={{
-                position: 'absolute', top: -2, right: -2,
-                background: 'var(--color-primary)', color: 'white',
-                borderRadius: '50%', width: 16, height: 16,
-                fontSize: '0.6rem', fontWeight: 700,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>{participants.length}</span>
-            </button>
-            <button className="btn-icon mobile-show-flex" onClick={() => setIsMobilePanelOpen(!isMobilePanelOpen)}
-              style={{ width: 34, height: 34, display: 'none' }}>
-               <HiOutlineChatAlt2 size={16} />
-            </button>
-            {(meeting?.host._id === user?.id || meeting?.host === user?.id || meeting?.host?._id === user?._id) && (
+            {/* Desktop Buttons */}
+            {!isMobile && (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn-secondary" onClick={copyInviteLink} 
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: '0.8rem' }}>
+                  <HiOutlineDuplicate size={16} /> Copy Invite
+                </button>
+                <button className="btn-icon" onClick={() => setShowParticipants(!showParticipants)}
+                  style={{ width: 34, height: 34, position: 'relative' }}>
+                  <HiOutlineUserGroup size={16} />
+                  <span style={{
+                    position: 'absolute', top: -2, right: -2,
+                    background: 'var(--color-primary)', color: 'white',
+                    borderRadius: '50%', width: 16, height: 16,
+                    fontSize: '0.6rem', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>{participants.length}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Mobile Only: Panel Toggle */}
+            {isMobile && (
+              <button className="btn-icon" onClick={() => setIsMobilePanelOpen(true)}
+                style={{ width: 34, height: 34 }}>
+                 <HiOutlineChatAlt2 size={16} />
+              </button>
+            )}
+
+            {(meeting?.host?._id === user?.id || meeting?.host?._id === user?._id || meeting?.host === user?.id) && !isMobile && (
               <button className="btn-icon" onClick={handleDeleteMeeting} 
                 style={{ width: 34, height: 34, color: 'var(--color-danger)' }} title="Delete Meeting">
                 <HiOutlineTrash size={16} />
               </button>
             )}
             <button className="btn-danger" onClick={leaveMeeting} style={{ padding: '6px 14px', fontSize: '0.8rem' }}>
-              Leave
+              {isMobile ? <HiOutlineArrowLeft size={16} /> : 'Leave'}
             </button>
           </div>
         </div>
 
         {/* Video area */}
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          <VideoCall roomId={roomId} />
-          
+          <VideoCall roomId={roomId} isCompact={activePanel === PANELS.WHITEBOARD} />
           <ToastContainer theme="dark" />
 
           {/* Participants overlay */}
@@ -250,29 +263,45 @@ const MeetingRoom = () => {
       {/* Side Panel */}
       <div 
         className={`side-panel ${isMobilePanelOpen ? 'open' : ''}`}
-        style={{
+        style={isMobile ? {
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 1)', zIndex: 1000,
+          display: isMobilePanelOpen ? 'flex' : (activePanel === PANELS.WHITEBOARD ? 'flex' : 'none'),
+          flexDirection: 'column',
+          flex: activePanel === PANELS.WHITEBOARD ? 1 : 'none'
+        } : {
           flex: activePanel === PANELS.WHITEBOARD ? 1 : '0 0 360px',
           borderLeft: activePanel === PANELS.WHITEBOARD ? 'none' : '1px solid var(--glass-border)',
           display: 'flex', flexDirection: 'column',
-          background: 'rgba(30, 41, 59, 0.95)',
-          transition: 'all 0.3s ease',
+          background: 'rgba(15, 23, 42, 0.95)',
+          transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+          position: 'relative',
+          zIndex: 2,
         }}
       >
         {/* Mobile Header for Panel */}
-        <div className="mobile-only" style={{ 
-          padding: '12px 16px', display: 'none', 
-          justifyContent: 'space-between', alignItems: 'center',
-          borderBottom: '1px solid var(--glass-border)',
-          background: 'var(--color-surface-light)'
-        }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>Options</h3>
-          <button onClick={() => setIsMobilePanelOpen(false)} style={{ color: 'var(--color-text-muted)', background: 'none', border: 'none', fontSize: '1.2rem' }}>&times;</button>
-        </div>
+        {isMobile && isMobilePanelOpen && (
+          <div style={{ 
+            padding: '12px 16px', display: 'flex', 
+            justifyContent: 'space-between', alignItems: 'center',
+            borderBottom: '1px solid var(--glass-border)',
+            background: 'rgba(15, 23, 42, 0.95)'
+          }}>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 600 }}>{activePanel.toUpperCase()}</h3>
+            <button onClick={() => setIsMobilePanelOpen(false)} style={{ 
+              color: 'var(--color-text-muted)', background: 'rgba(255,255,255,0.1)', 
+              border: 'none', borderRadius: '50%', width: 28, height: 28, fontSize: '1rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>&times;</button>
+          </div>
+        )}
 
         {/* Panel Tabs */}
         <div style={{
-          display: 'flex', borderBottom: '1px solid var(--glass-border)',
-          overflowX: 'auto'
+          display: isMobile && !isMobilePanelOpen && activePanel !== PANELS.WHITEBOARD ? 'none' : 'flex', 
+          borderBottom: '1px solid var(--glass-border)',
+          overflowX: 'auto',
+          background: 'rgba(15, 23, 42, 0.5)'
         }}>
           {[
             { key: PANELS.CHAT, icon: <HiOutlineChatAlt2 size={18} />, label: 'Chat' },
@@ -280,17 +309,26 @@ const MeetingRoom = () => {
             { key: PANELS.FILES, icon: <HiOutlineDocument size={18} />, label: 'Files' },
             { key: PANELS.TASKS, icon: <HiOutlineInformationCircle size={18} />, label: 'Tasks' },
           ].map((tab) => (
-            <button key={tab.key} type="button" onClick={() => setActivePanel(tab.key)}
+            <button key={tab.key} type="button" onClick={() => { setActivePanel(tab.key); setIsMobilePanelOpen(false); }}
               style={{
-                flex: 1, padding: '12px 8px', border: 'none', cursor: 'pointer',
+                flex: 1, padding: '14px 8px', border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 fontSize: '0.75rem', fontWeight: 600, transition: 'all 0.2s',
-                background: activePanel === tab.key ? 'var(--color-surface-lighter)' : 'transparent',
+                background: activePanel === tab.key ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
                 color: activePanel === tab.key ? 'var(--color-primary-light)' : 'var(--color-text-muted)',
-                borderBottom: activePanel === tab.key ? '2px solid var(--color-primary)' : '2px solid transparent',
-                minWidth: '80px'
+                position: 'relative',
+                minWidth: '60px'
               }}>
-              {tab.icon} <span className="mobile-hide">{tab.label}</span>
+              {tab.icon} <span className={isMobile ? 'mobile-hide' : ''}>{tab.label}</span>
+              {activePanel === tab.key && (
+                <motion.div 
+                  layoutId="activeTab"
+                  style={{ 
+                    position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, 
+                    background: 'var(--color-primary)', borderRadius: '2px 2px 0 0' 
+                  }} 
+                />
+              )}
             </button>
           ))}
         </div>
