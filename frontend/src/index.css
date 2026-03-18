@@ -43,10 +43,17 @@ body {
 /* ─── Glass Card ────────────────────────────────────────── */
 .glass-card {
   background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.glass-card-dropdown {
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(32px) !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
 }
 
 /* ─── Glow Button ───────────────────────────────────────── */
@@ -144,6 +151,13 @@ body {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 .input-field::placeholder { color: var(--color-text-muted); }
+
+/* Force dark background for native select options */
+select.input-field option {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  padding: 8px;
+}
 
 /* ─── Animations ────────────────────────────────────────── */
 @keyframes fadeIn {

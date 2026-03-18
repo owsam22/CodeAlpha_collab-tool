@@ -132,7 +132,7 @@ const Navbar = () => {
                       initial={{ opacity: 0, y: 10, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="glass-card" 
+                      className="glass-card glass-card-dropdown" 
                       style={{
                         position: 'absolute', right: 0, top: 48, width: 320,
                         maxHeight: 400, overflow: 'auto', padding: 8, zIndex: 1000
@@ -190,7 +190,7 @@ const Navbar = () => {
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="glass-card" 
+                        className="glass-card glass-card-dropdown" 
                         style={{
                           position: 'absolute', right: 0, top: 48, width: 220, padding: 8, zIndex: 1000
                         }}

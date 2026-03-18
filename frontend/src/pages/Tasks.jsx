@@ -70,10 +70,10 @@ const Tasks = () => {
               onChange={e => setFilter(e.target.value)}
               style={{ background: 'none', border: 'none', color: 'var(--color-text)', fontSize: '0.9rem', outline: 'none', cursor: 'pointer' }}
             >
-              <option value="all">All Status</option>
-              <option value="todo">To Do</option>
-              <option value="in-progress">In Progress</option>
-              <option value="done">Done</option>
+              <option value="all" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>All Status</option>
+              <option value="todo" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>To Do</option>
+              <option value="in-progress" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>In Progress</option>
+              <option value="done" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>Done</option>
             </select>
           </div>
 
@@ -83,9 +83,9 @@ const Tasks = () => {
               onChange={e => setSelectedTeam(e.target.value)}
               style={{ background: 'none', border: 'none', color: 'var(--color-text)', fontSize: '0.9rem', outline: 'none', cursor: 'pointer' }}
             >
-              <option value="all">All Teams</option>
+              <option value="all" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>All Teams</option>
               {teams.map(team => (
-                <option key={team._id} value={team._id}>{team.name}</option>
+                <option key={team._id} value={team._id} style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>{team.name}</option>
               ))}
             </select>
           </div>

@@ -142,9 +142,9 @@ const Dashboard = () => {
               value={selectedTeamId} onChange={e => setSelectedTeamId(e.target.value)}
               required
             >
-              <option value="" disabled>Select a Team to start meeting</option>
+              <option value="" disabled style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}>Select a Team to start meeting</option>
               {teams.map(t => (
-                <option key={t._id} value={t._id}>Team: {t.name}</option>
+                <option key={t._id} value={t._id} style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>Team: {t.name}</option>
               ))}
             </select>
             <div style={{ display: 'flex', gap: 12 }}>
