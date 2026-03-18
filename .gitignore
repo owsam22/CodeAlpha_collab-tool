@@ -5,3 +5,5 @@ dist/
 build/
 *.log
 .DS_Store
+build-log-final.txt
+plan.md
