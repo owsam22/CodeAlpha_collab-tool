@@ -28,7 +28,7 @@ const Footer = () => {
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             marginBottom: 16 
-          }}>Velo</h2>
+          }}>Collab Space</h2>
           <p style={{ color: 'var(--color-text-muted)', lineHeight: 1.6, fontSize: '0.9rem' }}>
             A premium real-time collaboration tool designed for high-performance teams. 
             Connect, share, and build together with zero friction.
@@ -80,7 +80,7 @@ const Footer = () => {
         color: 'var(--color-text-muted)',
         fontSize: '0.8rem'
       }}>
-        © {new Date().getFullYear()} Velo. All rights reserved. Created for Code Alpha Internship.
+        © {new Date().getFullYear()} Collab Space. All rights reserved. Created for Code Alpha Internship.  
       </div>
     </footer>
   );
